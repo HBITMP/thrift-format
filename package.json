@@ -2,7 +2,7 @@
   "name": "ThriftFormat",
   "displayName": "thrift 格式化工具",
   "description": "thrift 格式化工具",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "hbitmpcoder",
   "repository": {
     "type": "git",
