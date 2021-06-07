@@ -112,7 +112,7 @@ function StructHandler (thriftStruct: t.StructDefinition) :string[] {
 		}
 
 		if (field.fieldID != undefined) {
-			fieldValue.numberValue = strFill("    "+field.fieldID.value+":", lenObj.numLen+1);
+			fieldValue.numberValue = "    "+strFill(+field.fieldID.value+":", lenObj.numLen);
 		}
 		if (field.requiredness != undefined) {
 			fieldValue.optionValue = strFill(field.requiredness, lenObj.optionLen);

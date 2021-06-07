@@ -4,6 +4,11 @@
   "description": "thrift 格式化工具",
   "version": "0.0.1",
   "publisher": "hbitmpcoder",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HBITMP/thrift-format.git"
+  },
+  "icon": "static/favicon.ico",
   "engines": {
     "vscode": "^1.56.0"
   },
