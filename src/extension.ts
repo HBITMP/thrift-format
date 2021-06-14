@@ -5,12 +5,13 @@ const fs = require('fs');
 let thriftParser = require('thrift-parser');
 const vscode_1 = require("vscode");
 import * as t from '@byte-ferry/parser';
+import * as handler from './handler';
 
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-	
+
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
 	console.log('Congratulations, your extension "ThriftFormat" is now active!');
@@ -27,134 +28,92 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showErrorMessage('没有选中thrift文件，格式化失败');
 			return
 		}
+		console.log(thriftFilePath)
 		// 读取文件内容
 		const thriftFileContent = fs.readFileSync(thriftFilePath, 'utf8');
-		let thriftContentArr:string = thriftFileContent.split("\n")
-		let contentArr:string[] = new Array()
+		let thriftContentArr: string = thriftFileContent.split("\n")
+		let contentArr: string[] = new Array()
 		// 解析thrift 语法
 		const document = t.parse(thriftFileContent);
 		console.log(document)
+		let contentData = new handler.ContentData()
 		document.body.forEach(item => {
 			switch (item.type) {
 				case t.SyntaxType.StructDefinition:
-					let content = StructHandler(item)
-					contentArr = contentArr.concat(content)
+					let nodeData = new handler.NodeData()
+					nodeData.ContentArr = handler.StructHandler(item)
+					contentData.Structs.push(nodeData)
+					break;
+				case t.SyntaxType.NamespaceDefinition:
+					let nodeDatan = new handler.NodeData()
+					nodeDatan.ContentArr = handler.namespaceHandler(item)
+					contentData.NameSpaces.push(nodeDatan)
+					break
+				case t.SyntaxType.EnumDefinition:
+					let nodeDatae = new handler.NodeData()
+					nodeDatae.ContentArr = handler.enumHandler(item)
+					contentData.Enums.push(nodeDatae)
+					break;
+				case t.SyntaxType.IncludeDefinition:
+					let nodeDataI = new handler.NodeData()
+					nodeDataI.ContentArr = handler.includeHandler(item)
+					contentData.Includes.push(nodeDataI)
+					break
+				case t.SyntaxType.ServiceDefinition:
+					let nodeDataS = new handler.NodeData()
+					nodeDataS.ContentArr = handler.ServiceHandler(item)
+					contentData.Structs.push(nodeDataS)
 					break;
 				default:
-					console.log(item)
-					for (let index = item.loc.start.line; index <= item.loc.end.line; index++) {
-						contentArr.push(thriftContentArr[index-1])
-						contentArr.push("")
-					}	
+					let others = new Array()
+					for (let index = item.loc.start.line; index <= item.loc.end.line + 1; index++) {
+						others.push(thriftContentArr[index - 1])
+					}
+					others.push("")
+					let nodeDataO = new handler.NodeData()
+					nodeDataO.ContentArr = others
+					contentData.Others.push(nodeDataO)
 			}
 		})
+		contentArr = concatAllData(contentData)
+		console.log(contentArr)
+		// 拼接所有的类型
 		replace(0, vscode_1.window.activeTextEditor.document.lineCount + 1, contentArr.join("\n"))
 	});
-
 
 	context.subscriptions.push(disposable);
 }
 
-interface ReplaceContent {
-	startLine: number,
-	endLine: number,
-	content: string,
-}
-
-// 单个结构体处理
-function StructHandler (thriftStruct: t.StructDefinition) :string[] {
+function concatAllData(data: handler.ContentData): string[] {
 	let contentArr: string[] = new Array()
-	//  1: required i64 submit_id,  // 提交id
-	//  1  2        3   4           5
-	let lenObj = {
-		numLen: 0,
-		optionLen: 0,
-		typeLen: 0,
-		fieldNameLen: 0,
-		noteLen: 0,
-	}
-
-	// 字段长度处理
-	thriftStruct.fields.forEach(field => {
-		if (field.fieldID != undefined && (field.fieldID.value+"").length > lenObj.numLen) {
-			lenObj.numLen = (field.fieldID.value+"").length+1; // 加一个引号的长度
-		}
-		if (field.requiredness !=undefined && field.requiredness.length > lenObj.optionLen) {
-			lenObj.optionLen = field.requiredness.length;
-		}
-		if (field.fieldType != undefined) {
-			let type = typeHandler(field.fieldType)
-			if (type.length > lenObj.typeLen) {
-				lenObj.typeLen = type.length;
-			}
-		}
-		if (field.name != undefined && field.name.value.length > lenObj.fieldNameLen) {
-			lenObj.fieldNameLen = field.name.value.length
-		}
- 	})
-
-
-	// 注释处理
-	if (thriftStruct.comments.length > 0) {
-		thriftStruct.comments.forEach(comment => {
-			contentArr.push("// " + comment.value)
-		})
-	}
-	contentArr.push("struct "+ thriftStruct.name.value+" {")
-	// 字段处理
-	thriftStruct.fields.forEach(field => {
-		let fieldValue = {
-			numberValue: "",
-			optionValue: "",
-			typeValue: "",
-			namevalue: "",
-			commentValue: "",
-		}
-
-		if (field.fieldID != undefined) {
-			fieldValue.numberValue = "    "+strFill(+field.fieldID.value+":", lenObj.numLen);
-		}
-		if (field.requiredness != undefined) {
-			fieldValue.optionValue = strFill(field.requiredness, lenObj.optionLen);
-		}
-		if (field.fieldType != undefined) {
-			let type = typeHandler(field.fieldType)
-			fieldValue.typeValue = strFill(type, lenObj.typeLen+1);
-		}
-		if (field.name != undefined) {
-			fieldValue.namevalue = strFill(field.name.value, lenObj.fieldNameLen+2);
-		}
-		if (field.comments.length > 0) {
-			fieldValue.commentValue = "// "+field.comments[0].value
-		}
-		contentArr.push(fieldValue.numberValue+fieldValue.optionValue+fieldValue.typeValue+fieldValue.namevalue+fieldValue.commentValue)
+	data.NameSpaces.forEach(item => {
+		contentArr = contentArr.concat(item.ContentArr)
 	})
-	contentArr.push("}")
 	contentArr.push("")
+	data.Includes.forEach(item => {
+		contentArr = contentArr.concat(item.ContentArr)
+	})
+	contentArr.push("")
+	data.Enums.forEach(item => {
+		contentArr = contentArr.concat(item.ContentArr)
+	})
+	contentArr.push("")
+	data.Structs.forEach(item => {
+		contentArr = contentArr.concat(item.ContentArr)
+	})
+	contentArr.push("")
+	data.Services.forEach(item => {
+		contentArr = contentArr.concat(item.ContentArr)
+	})
+	contentArr.push("")
+	data.Others.forEach(item => {
+		contentArr = contentArr.concat(item.ContentArr)
+	})
 	return contentArr
 }
 
-// 类型处理
-function typeHandler (typeStruct:t.FunctionType) :string {
-	let typeStr = ""
-	switch (typeStruct.type) {
-		case t.SyntaxType.Identifier:
-			return typeStruct.value			
-		case t.SyntaxType.MapType:
-			let keyType = typeHandler(typeStruct.keyType)
-			let valueType = typeHandler(typeStruct.valueType)
-			return "map<"+keyType+", "+valueType+">"
-		case t.SyntaxType.ListType:
-			let listType = typeHandler(typeStruct.valueType)
-			return "list<"+listType+">"
-		default:
-			return typeStruct.type.substr(0, typeStruct.type.length-7).toLocaleLowerCase()
-	
-	}
-}
 
-function replace(startLine:number, endLine:number, content: string) {
-	console.log(startLine + "; "+endLine+"; ")
+function replace(startLine: number, endLine: number, content: string) {
 	if (startLine > 0) {
 		startLine = startLine - 1
 	}
@@ -166,13 +125,5 @@ function replace(startLine:number, endLine:number, content: string) {
 	});
 }
 
-// 字符串填充
-function strFill(str:string, len:Number) :string {
-	for (let index = str.length-1; index < len; index++) {
-		str += " "
-	}
-	return str
-}
-
 // this method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() { }
